@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام فرز النفايات الذكي</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+            direction: rtl;
+        }
+        h1 {
+            color: #333;
+        }
+        #preview {
+            margin: 20px 0;
+            max-width: 100%;
+            height: auto;
+        }
+        #result {
+            margin-top: 20px;
+            font-size: 1.2em;
+            color: #333;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 1em;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>نظام فرز النفايات الذكي</h1>
+    <p>التقط صورة للنفايات باستخدام كاميرا الجوال</p>
+    
+    <input type="file" id="imageInput" accept="image/*" capture="environment" style="display: none;">
+    <button onclick="document.getElementById('imageInput').click();">التقط صورة</button>
+    
+    <div>
+        <img id="preview" src="" alt="معاينة الصورة" style="display: none;">
+    </div>
+    
+    <button id="predictButton" onclick="predict()" style="display: none;">تنبأ</button>
+    
+    <div id="result"></div>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const preview = document.getElementById('preview');
+        const predictButton = document.getElementById('predictButton');
+        const resultDiv = document.getElementById('result');
+
+        imageInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                    predictButton.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function predict() {
+            const formData = new FormData();
+            formData.append('file', imageInput.files[0]);
+
+            fetch('/predict', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    resultDiv.innerHTML = `<span style="color: red;">خطأ: ${data.error}</span>`;
+                } else {
+                    resultDiv.innerHTML = `التنبؤ: ${data.prediction}<br>درجة الثقة: ${data.confidence}`;
+                }
+            })
+            .catch(error => {
+                resultDiv.innerHTML = `<span style="color: red;">خطأ: ${error.message}</span>`;
+            });
+        }
+    </script>
+</body>
+</html>
