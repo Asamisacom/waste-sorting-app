@@ -5,4 +5,4 @@ torchvision==0.15.2+cpu
 opencv-python
 numpy
 werkzeug
-Pillow
+
