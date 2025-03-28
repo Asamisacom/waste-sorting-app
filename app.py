@@ -17,7 +17,7 @@ if not os.path.exists(UPLOAD_FOLDER):
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # دالة المعالجة المسبقة للصور
-def preprocess_image(image_path, target_size=(224, 224)):
+def preprocess_image(image_path, target_size=(128, 128)):  # تقليل الحجم إلى 128x128
     img = cv2.imread(image_path)
     if img is None:
         return None
@@ -57,8 +57,12 @@ def predict_image(image_path, confidence_threshold=0.5):
         predicted_class = predicted.item()
         confidence_score = confidence.item()
 
-    # تحديد الفئات (قم بتغيير الأسماء حسب تدريب النموذج)
-    class_names = ["Recyclable", "Non-Recyclable"]  # استبدل هذه الأسماء حسب تدريب النموذج
+    # تحرير الذاكرة
+    del img, outputs, probabilities
+    torch.cuda.empty_cache()
+
+    # تحديد الفئات
+    class_names = ["Recyclable", "Non-Recyclable"]
     if confidence_score < confidence_threshold:
         return "Low confidence prediction. Please try another image.", confidence_score
     
@@ -72,28 +76,41 @@ def index():
 # مسار التنبؤ
 @app.route('/predict', methods=['POST'])
 def predict():
+    print("Received a request to /predict")
     if 'file' not in request.files:
+        print("No file part in the request")
         return jsonify({'error': 'No file part'})
     
     file = request.files['file']
+    print(f"File received: {file.filename}")
     if file.filename == '':
+        print("No selected file")
         return jsonify({'error': 'No selected file'})
     
     if file:
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(file_path)
-        
-        # التنبؤ
-        prediction, confidence = predict_image(file_path)
-        
-        # حذف الصورة بعد التنبؤ (اختياري)
-        os.remove(file_path)
-        
-        return jsonify({
-            'prediction': prediction,
-            'confidence': confidence
-        })
+        try:
+            filename = secure_filename(file.filename)
+            print(f"Secure filename: {filename}")
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            print(f"Saving file to: {file_path}")
+            file.save(file_path)
+            
+            # التنبؤ
+            print("Starting prediction...")
+            prediction, confidence = predict_image(file_path)
+            print(f"Prediction result: {prediction}, Confidence: {confidence}")
+            
+            # حذف الصورة بعد التنبؤ
+            os.remove(file_path)
+            print("File deleted after prediction")
+            
+            return jsonify({
+                'prediction': prediction,
+                'confidence': confidence
+            })
+        except Exception as e:
+            print(f"Error during prediction: {str(e)}")
+            return jsonify({'error': f'Error during prediction: {str(e)}'})
 
 if __name__ == '__main__':
     app.run(debug=True)
