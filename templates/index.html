@@ -1,97 +1,136 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام فرز النفايات الذكي</title>
+    <title>Waste Sorting App</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             text-align: center;
             background-color: #f0f0f0;
-            direction: rtl;
+            margin: 0;
+            padding: 20px;
         }
         h1 {
-            color: #333;
+            color: #2c3e50;
         }
-        #preview {
+        p {
+            color: #7f8c8d;
+        }
+        form {
             margin: 20px 0;
-            max-width: 100%;
-            height: auto;
+        }
+        input[type="file"] {
+            margin: 10px;
+        }
+        button {
+            background-color: #27ae60;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #219653;
         }
         #result {
             margin-top: 20px;
-            font-size: 1.2em;
-            color: #333;
+            font-size: 18px;
+            color: #e74c3c;
         }
-        button {
-            padding: 10px 20px;
-            font-size: 1em;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-            margin: 10px;
-        }
-        button:hover {
-            background-color: #45a049;
+        #preview {
+            margin: 20px 0;
+            max-width: 300px;
         }
     </style>
 </head>
 <body>
-    <h1>نظام فرز النفايات الذكي</h1>
-    <p>التقط صورة للنفايات باستخدام كاميرا الجوال</p>
-    
-    <input type="file" id="imageInput" accept="image/*" capture="environment" style="display: none;">
-    <button onclick="document.getElementById('imageInput').click();">التقط صورة</button>
-    
-    <div>
-        <img id="preview" src="" alt="معاينة الصورة" style="display: none;">
-    </div>
-    
-    <button id="predictButton" onclick="predict()" style="display: none;">تنبأ</button>
-    
+    <h1>تطبيق فرز النفايات</h1>
+    <p>ارفع صورة النفايات لمعرفة كم هي قابلة لإعادة التدوير</p>
+    <form id="upload-form" enctype="multipart/form-data">
+        <input type="file" id="file-input" name="file" accept="image/*" required>
+        <button type="submit">تنبأ</button>
+    </form>
+    <img id="preview" src="" alt="" style="display: none;">
     <div id="result"></div>
 
     <script>
-        const imageInput = document.getElementById('imageInput');
-        const preview = document.getElementById('preview');
-        const predictButton = document.getElementById('predictButton');
-        const resultDiv = document.getElementById('result');
+        async function resizeImage(file, maxWidth, maxHeight) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.src = URL.createObjectURL(file);
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
 
-        imageInput.addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    preview.src = e.target.result;
-                    preview.style.display = 'block';
-                    predictButton.style.display = 'block';
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height = Math.round((height * maxWidth) / width);
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width = Math.round((width * maxHeight) / height);
+                            height = maxHeight;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    canvas.toBlob((blob) => {
+                        resolve(new File([blob], file.name, { type: file.type }));
+                    }, file.type, 0.7);
                 };
-                reader.readAsDataURL(file);
+            });
+        }
+
+        // معاينة الصورة عند اختيارها
+        document.getElementById('file-input').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const preview = document.getElementById('preview');
+                preview.src = URL.createObjectURL(file);
+                preview.style.display = 'block';
             }
         });
 
-        function predict() {
-            const formData = new FormData();
-            formData.append('file', imageInput.files[0]);
+        document.getElementById('upload-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'جاري التنبؤ...';
 
-            fetch('/predict', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    resultDiv.innerHTML = `<span style="color: red;">خطأ: ${data.error}</span>`;
-                } else {
-                    resultDiv.innerHTML = `التنبؤ: ${data.prediction}<br>درجة الثقة: ${data.confidence}`;
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+
+            // تقليل حجم الصورة قبل الرفع
+            const resizedFile = await resizeImage(file, 512, 512);
+
+            const formData = new FormData();
+            formData.append('file', resizedFile);
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
                 }
-            })
-            .catch(error => {
-                resultDiv.innerHTML = `<span style="color: red;">خطأ: ${error.message}</span>`;
-            });
-        }
+
+                const result = await response.json();
+                if (result.error) {
+                    resultDiv.innerHTML = `خطأ: ${result.error}`;
+                } else {
+                    resultDiv.innerHTML = `التنبؤ: ${result.prediction} (الثقة: ${(result.confidence * 100).toFixed(2)}%)`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `خطأ: ${error.message}`;
+            }
+        });
     </script>
 </body>
 </html>
