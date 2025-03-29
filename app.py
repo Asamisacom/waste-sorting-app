@@ -17,7 +17,7 @@ if not os.path.exists(UPLOAD_FOLDER):
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # دالة المعالجة المسبقة للصور
-def preprocess_image(image_path, target_size=(128, 128)):  # تقليل الحجم إلى 128x128
+def preprocess_image(image_path, target_size=(64, 64)):
     img = cv2.imread(image_path)
     if img is None:
         return None
