@@ -1,5 +1,6 @@
 import os
 import cv2
+import numpy as np  # إضافة مكتبة numpy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -18,13 +19,45 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # دالة المعالجة المسبقة للصور
 def preprocess_image(image_path, target_size=(64, 64)):
+    # تحميل الصورة
     img = cv2.imread(image_path)
     if img is None:
         return None
+
+    # تحويل الصورة إلى فضاء ألوان HSV لتسهيل تحديد الخلفية
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+    # تحديد نطاق لون الخلفية (مثال: خلفية بيضاء أو فاتحة)
+    # يمكنك تعديل هذه القيم بناءً على لون الخلفية في صورك
+    lower_bound = np.array([0, 0, 200])  # لون فاتح (قريب من الأبيض)
+    upper_bound = np.array([180, 50, 255])
+    mask = cv2.inRange(hsv, lower_bound, upper_bound)
+
+    # عكس القناع للحصول على الجسم الرئيسي
+    mask = cv2.bitwise_not(mask)
+
+    # تطبيق القناع على الصورة لإزالة الخلفية
+    img = cv2.bitwise_and(img, img, mask=mask)
+
+    # تقليل الضجيج باستخدام Gaussian Blur
+    img = cv2.GaussianBlur(img, (5, 5), 0)
+
+    # تقليل الحواف باستخدام Morphological Operations
+    kernel = np.ones((3, 3), np.uint8)
+    img = cv2.erode(img, kernel, iterations=1)  # تقليل الحواف
+    img = cv2.dilate(img, kernel, iterations=1)  # استعادة التفاصيل
+
+    # تغيير الحجم
     img = cv2.resize(img, target_size)
+
+    # تحويل الألوان إلى RGB (لأن OpenCV يستخدم BGR)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    # تحويل الصورة إلى تنسور
     img = img / 255.0
     img = torch.tensor(img, dtype=torch.float32).permute(2, 0, 1)
+
+    # تطبيق التحويلات (Normalization)
     transform = transforms.Compose([
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
